@@ -1,71 +1,228 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AI Website Generator</title>
-  <link rel="stylesheet" href="style.css" />
+  <meta charset="utf-8" />
+  <title>Website Generator</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body{font-family:system-ui,Segoe UI,Roboto,Arial;margin:2rem;max-width:1100px}
+    h1{margin:0 0 1rem}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+    textarea{width:100%;min-height:140px;padding:.8rem;font-size:1rem}
+    button{padding:.7rem 1rem;font-size:1rem;cursor:pointer}
+    .row{display:flex;gap:.5rem;align-items:center;margin:.5rem 0 1rem}
+    iframe{width:100%;height:520px;border:1px solid #ddd;border-radius:8px}
+    pre{background:#111;color:#eee;padding:1rem;border-radius:8px;white-space:pre-wrap}
+    .tabs{display:flex;gap:.5rem;margin:.5rem 0}
+    .tabs button{border:1px solid #ccc;background:#fafafa}
+    .code{display:none}
+    .code.active{display:block}
+  </style>
 </head>
-
 <body>
-  <h1>⚙️ AI Website Generator</h1>
-  <textarea id="prompt" placeholder="Describe your website..."></textarea>
-  <button id="generateBtn">Generate</button>
-  <button id="downloadBtn" style="margin-left:10px;background:#008cff;">Download</button>
+  <h1>🧪 Website Generator</h1>
 
-<pre id="output"></pre>
-<iframe id="preview" style="width:80%;height:400px;margin-top:1rem;border-radius:8px;border:none;background:white;"></iframe>
+  <div class="grid">
+    <div>
+      <label for="spec"><b>Describe the site you want:</b></label>
+      <textarea id="spec" placeholder="Example: A SaaS landing page with a hero, features grid, pricing, and a footer. Use a blue/purple gradient."></textarea>
+      <div class="row">
+        <button id="gen">Generate</button>
+        <button id="download" disabled>Download .zip</button>
+      </div>
 
+      <div class="tabs">
+        <button data-tab="html">HTML</button>
+        <button data-tab="css">CSS</button>
+        <button data-tab="js">JS</button>
+      </div>
+      <pre id="html" class="code"></pre>
+      <pre id="css" class="code"></pre>
+      <pre id="js" class="code"></pre>
+    </div>
 
-<script>
-  const btn = document.getElementById("generateBtn");
-  const downloadBtn = document.getElementById("downloadBtn");
-  const promptInput = document.getElementById("prompt");
-  const output = document.getElementById("output");
-  const preview = document.getElementById("preview");
+    <div>
+      <b>Live Preview</b>
+      <iframe id="preview"></iframe>
+    </div>
+  </div>
 
-  let lastGenerated = ""; // to store AI's last reply
+  <script type="module">
+    let current = { html: "", css: "", js: "" };
 
-  btn.onclick = async () => {
-    const prompt = promptInput.value;
-    output.textContent = "Generating... ⏳";
-    preview.srcdoc = "";
-    lastGenerated = "";
+    const $ = (q) => document.querySelector(q);
+    const spec = $("#spec");
+    const btnGen = $("#gen");
+    const btnZip = $("#download");
+    const frame = $("#preview");
+    const htmlBox = $("#html");
+    const cssBox = $("#css");
+    const jsBox  = $("#js");
 
-    const res = await fetch("http://localhost:3000/generate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ prompt }),
+    // simple tabs
+    document.querySelectorAll(".tabs button").forEach(b=>{
+      b.onclick = ()=>{
+        document.querySelectorAll(".code").forEach(c=>c.classList.remove("active"));
+        $("#"+b.dataset.tab).classList.add("active");
+      };
     });
+    // default tab
+    htmlBox.classList.add("active");
 
-    const data = await res.json();
-    lastGenerated = data.reply;
-    output.textContent = data.reply;
+    btnGen.onclick = async () => {
+      btnGen.disabled = true;
+      btnGen.textContent = "Generating…";
+      btnZip.disabled = true;
 
-    if (data.reply.includes("<html") || data.reply.includes("<body")) {
-      preview.srcdoc = data.reply;
-    } else {
-      preview.srcdoc = `<div style='padding:20px;font-family:sans-serif'>
-        <h2>Generated Output</h2><p>${data.reply}</p>
-      </div>`;
-    }
-  };
+      try {
+        const res = await fetch("http://localhost:3000/generate", {
+          method: "POST",
+          headers: {"Content-Type":"application/json"},
+          body: JSON.stringify({ prompt: spec.value || "A simple portfolio with hero, projects grid, and contact form." })
+        });
+        const data = await res.json();
+        current = { html: data.html ?? "", css: data.css ?? "", js: data.js ?? "" };
 
-  // 💾 Download button logic
-  downloadBtn.onclick = () => {
-    if (!lastGenerated) {
-      alert("No site generated yet!");
-      return;
-    }
+        // show code
+        htmlBox.textContent = current.html;
+        cssBox.textContent  = current.css;
+        jsBox.textContent   = current.js;
 
-    const blob = new Blob([lastGenerated], { type: "text/html" });
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.download = "generated-site.html";
-    link.click();
-  };
-</script>
+        // render preview: compose a full HTML doc with inline <style> and <script>
+const doc = `
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="stylesheet" href="style.css">
+<style>${current.css}</style>
+</head>
+<body>
+${current.html}
+<script>${current.js}</script>
+</body>
+</html>
+`;
+        frame.srcdoc = doc;
 
+        btnZip.disabled = false;
+        btnGen.textContent = "Generate";
+        btnGen.disabled = false;
+      } catch (e) {
+        alert("Generation failed: " + e.message);
+        btnGen.textContent = "Generate";
+        btnGen.disabled = false;
+      }
+    };
 
+    // build a zip for download (no external libs)
+    btnZip.onclick = async () => {
+      const files = {
+        "index.html": `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="stylesheet" href="style.css">
+<title>Generated Site</title>
+</head>
+<body>
+${current.html}
+<script src="script.js"></script>
+</body>
+</html>`,
+        "style.css": current.css,
+        "script.js": current.js
+      };
+
+      // Minimal zip writer (store method) using TextEncoder
+      const enc = new TextEncoder();
+      const fileEntries = [];
+      let offset = 0;
+      let fileDataParts = [];
+
+      function crc32(str){
+        // Tiny CRC-32 (not crypto, just for ZIP metadata)
+        let c = ~0;
+        for (let i = 0; i < str.length; i++){
+          c = (c ^ str.charCodeAt(i)) >>> 0;
+          for (let k = 0; k < 8; k++){
+            c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+          }
+        }
+        return (~c) >>> 0;
+      }
+
+      for (const [name, content] of Object.entries(files)) {
+        const bytes = enc.encode(content);
+        const nameBytes = enc.encode(name);
+        const crc = crc32(content);
+        const localHeader = new Uint8Array(30 + nameBytes.length);
+        const dv = new DataView(localHeader.buffer);
+        dv.setUint32(0, 0x04034b50, true);       // local file header signature
+        dv.setUint16(4, 20, true);               // version needed
+        dv.setUint16(6, 0, true);                // flags
+        dv.setUint16(8, 0, true);                // compression (0 = store)
+        dv.setUint16(10, 0, true);               // mod time
+        dv.setUint16(12, 0, true);               // mod date
+        dv.setUint32(14, crc, true);             // CRC-32
+        dv.setUint32(18, bytes.length, true);    // compressed size
+        dv.setUint32(22, bytes.length, true);    // uncompressed size
+        dv.setUint16(26, nameBytes.length, true);// file name length
+        dv.setUint16(28, 0, true);               // extra length
+        localHeader.set(nameBytes, 30);
+
+        fileDataParts.push(localHeader, bytes);
+        fileEntries.push({ nameBytes, crc, size: bytes.length, offset });
+        offset += localHeader.length + bytes.length;
+      }
+
+      const centralParts = [];
+      let centralSize = 0;
+      for (const e of fileEntries) {
+        const header = new Uint8Array(46 + e.nameBytes.length);
+        const dv = new DataView(header.buffer);
+        dv.setUint32(0, 0x02014b50, true);   // central file header signature
+        dv.setUint16(4, 20, true);           // version made by
+        dv.setUint16(6, 20, true);           // version needed
+        dv.setUint16(8, 0, true);            // flags
+        dv.setUint16(10, 0, true);           // compression
+        dv.setUint16(12, 0, true);           // mod time
+        dv.setUint16(14, 0, true);           // mod date
+        dv.setUint32(16, e.crc, true);       // CRC-32
+        dv.setUint32(20, e.size, true);      // compressed size
+        dv.setUint32(24, e.size, true);      // uncompressed size
+        dv.setUint16(28, e.nameBytes.length, true);
+        dv.setUint16(30, 0, true);           // extra
+        dv.setUint16(32, 0, true);           // comment
+        dv.setUint16(34, 0, true);           // disk number
+        dv.setUint16(36, 0, true);           // internal attrs
+        dv.setUint32(38, 0, true);           // external attrs
+        dv.setUint32(42, e.offset, true);    // local header rel offset
+        header.set(e.nameBytes, 46);
+        centralParts.push(header);
+        centralSize += header.length;
+      }
+
+      const end = new Uint8Array(22);
+      const dvEnd = new DataView(end.buffer);
+      dvEnd.setUint32(0, 0x06054b50, true);  // end of central dir signature
+      dvEnd.setUint16(4, 0, true);           // number of this disk
+      dvEnd.setUint16(6, 0, true);           // disk start
+      dvEnd.setUint16(8, fileEntries.length, true);
+      dvEnd.setUint16(10, fileEntries.length, true);
+      dvEnd.setUint32(12, centralSize, true);
+      dvEnd.setUint32(16, offset, true);     // offset of start of central dir
+      dvEnd.setUint16(20, 0, true);          // comment length
+
+      const blob = new Blob([...fileDataParts, ...centralParts, end], { type: "application/zip" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = "generated-site.zip";
+      link.click();
+      URL.revokeObjectURL(link.href);
+    };
+  </script>
 </body>
 </html>

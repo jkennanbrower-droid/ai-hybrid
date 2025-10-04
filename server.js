@@ -66,27 +66,83 @@ app.post("/api/ask", async (req, res) => {
  */
 app.post("/generate", async (req, res) => {
   const { prompt } = req.body ?? {};
-  if (!prompt) {
-    return res.status(400).json({ error: "Missing 'prompt' in request body." });
-  }
+  if (!prompt) return res.status(400).json({ error: "Missing 'prompt' in body." });
 
   try {
+    // Ask the model to return strict JSON with html/css/js fields
     const response = await client.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
         {
           role: "system",
-          content: "You are a helpful AI web developer who generates clean, modern HTML, CSS, and JS when asked.",
+          content: `You generate complete small websites. 
+Return ONLY strict JSON with keys: html, css, js.
+No Markdown fences, no extra text.`
         },
-        { role: "user", content: prompt },
+        {
+          role: "user",
+          content: `Build a small site as requested:
+Spec: ${prompt}
+
+Constraints:
+- Keep CSS in a single string (no imports).
+- Keep JS in a single string (no external CDNs).
+- The HTML must reference the CSS and JS as if in separate files: <link rel="stylesheet" href="style.css"> and <script src="script.js"></script>.
+- Use modern semantic HTML.`
+        }
       ],
+      temperature: 0.7
     });
 
-    const aiResponse = response.choices[0].message.content;
-    res.json({ reply: aiResponse });
-  } catch (error) {
-    console.error("Error:", error);
-    res.status(500).json({ error: "Something went wrong with OpenAI." });
+    // Try to parse model output as JSON
+    const raw = response.choices[0].message.content?.trim() ?? "{}";
+    let payload;
+    try {
+      payload = JSON.parse(raw);
+    } catch {
+      // fallback: strip code fences if model added them
+      const cleaned = raw.replace(/```json|```/g, "");
+      payload = JSON.parse(cleaned);
+    }
+
+    const { html = "", css = "", js = "" } = payload;
+
+    res.json({ html, css, js });
+  } catch (err) {
+    console.error("Generate error:", err);
+    res.status(500).json({ error: "Generation failed" });
+  }
+});
+app.post("/generate", async (req, res) => {
+  const { prompt } = req.body ?? {};
+  if (!prompt) return res.status(400).json({ error: "Missing 'prompt' in body." });
+  try {
+    const response = await client.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        { role: "system", content: `Return ONLY strict JSON with keys: html, css, js. No markdown fences.` },
+        {
+          role: "user",
+          content: `Build a small site:
+Spec: ${prompt}
+Constraints:
+- HTML references <link rel="stylesheet" href="style.css"> and <script src="script.js"></script>.
+- Keep all CSS in one string; JS in one string.`
+        }
+      ],
+      temperature: 0.7
+    });
+
+    const raw = response.choices[0].message.content?.trim() ?? "{}";
+    let payload;
+    try { payload = JSON.parse(raw); }
+    catch { payload = JSON.parse(raw.replace(/```json|```/g, "")); }
+
+    const { html = "", css = "", js = "" } = payload;
+    res.json({ html, css, js });
+  } catch (err) {
+    console.error("Generate error:", err);
+    res.status(500).json({ error: "Generation failed" });
   }
 });
 
