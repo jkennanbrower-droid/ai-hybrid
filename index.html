@@ -5,7 +5,7 @@
   <title>Website Generator</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    :root { --bg:#0b1220; --panel:#141c2f; --text:#e6eefc; --muted:#9db0d3; --accent:#10bfa0; --chip:#f4f6fb; --chipText:#333; }
+    :root { --bg:#0b1220; --panel:#141c2f; --text:#e6eefc; --muted:#9db0d3; --accent:#10bfa0; }
     *{box-sizing:border-box}
     body{font-family:system-ui,Segoe UI,Roboto,Arial;margin:2rem;max-width:1100px;color:var(--text);background:var(--bg)}
     h1{margin:0 0 1.2rem}
@@ -35,7 +35,7 @@
       <label for="spec"><b>Describe the site you want:</b></label>
       <textarea id="spec" placeholder="Example: A SaaS landing page with a hero, features grid, pricing, and a footer. Use a blue/purple gradient."></textarea>
 
-      <!-- Preset prompt buttons -->
+      <!-- Presets for quick testing -->
       <div class="presets">
         <button class="preset" data-prompt="SaaS landing page for ‘FocusFlow’. Hero with headline + two CTAs, 3-feature grid with icons, testimonial card, pricing (Free/Pro), minimal footer. Blue→purple gradient. Mobile-first.">SaaS</button>
         <button class="preset" data-prompt="Personal portfolio for web developer Kenny. Sticky nav (Home, Projects, About, Contact), hero with name + tagline, 6-card projects grid, skills badges (JS/Node/React), contact form. Neutral light theme, subtle shadows.">Portfolio</button>
@@ -66,12 +66,34 @@
   </div>
 
   <script type="module">
-    // --- helpers ---
-    const escScriptClose = (s) => String(s ?? "").replace(/<\/script>/gi, '<\\/script>');
+    // --- helpers (WHY: prevent accidental closing of this script tag + support full-doc returns) ---
+    const escClose = s => String(s ?? "").replace(/<\/script>/gi, '<\\/script>');
+    function buildPreviewDoc({ html, css, js }) {
+      const isFullDoc = /<!doctype|<html|<head|<body/i.test(html || "");
+      if (isFullDoc) {
+        // inject inline CSS before </head>, inline JS before </body>
+        let out = html.replace(/<\/head>/i, `<style>${css ?? ""}</style></head>`);
+        out = out.replace(/<\/body>/i, `<script>${escClose(js ?? "")}<\/script></body>`);
+        return escClose(out);
+      }
+      // wrap a body fragment
+      return escClose(`<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="stylesheet" href="style.css">
+<style>${css ?? ""}</style>
+</head>
+<body>
+${html ?? ""}
+<script>${escClose(js ?? "")}<\/script>
+</body>
+</html>`);
+    }
+
+    // --- DOM refs ---
     const $ = (q) => document.querySelector(q);
-
-    let current = { html: "", css: "", js: "" };
-
     const spec = $("#spec");
     const btnGen = $("#gen");
     const btnZip = $("#download");
@@ -95,10 +117,10 @@
       p.onclick = ()=>{ spec.value = p.dataset.prompt; spec.focus(); };
     });
 
+    // Generate
     btnGen.onclick = async () => {
       btnGen.disabled = true; btnZip.disabled = true;
       statusEl.textContent = "Generating…";
-
       try {
         const res = await fetch("http://localhost:3000/generate", {
           method: "POST",
@@ -108,44 +130,36 @@
         if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
         const data = await res.json();
 
-        current = { html: data.html ?? "", css: data.css ?? "", js: data.js ?? "" };
+        const current = {
+          html: data.html ?? "",
+          css:  data.css  ?? "",
+          js:   data.js   ?? ""
+        };
 
         // Show code
         htmlBox.textContent = current.html;
         cssBox.textContent  = current.css;
         jsBox.textContent   = current.js;
 
-        // Compose preview doc safely (escape any accidental </script>)
-        const doc = escScriptClose(`<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="stylesheet" href="style.css">
-<style>${current.css}</style>
-</head>
-<body>
-${current.html}
-<script>${current.js}<\/script>
-</body>
-</html>`);
+        // Build and load preview
+        const doc = buildPreviewDoc(current);
         frame.srcdoc = doc;
 
         btnZip.disabled = false;
         statusEl.textContent = "Done.";
       } catch (e) {
         console.error(e);
+        statusEl.textContent = "Failed: " + e.message;
         alert("Generation failed: " + e.message);
-        statusEl.textContent = "Failed.";
       } finally {
         btnGen.disabled = false;
       }
     };
 
-    // Build a .zip (index.html/style.css/script.js)
+    // Download .zip (index.html / style.css / script.js)
     btnZip.onclick = async () => {
       const files = {
-        "index.html": escScriptClose(`<!doctype html>
+        "index.html": escClose(`<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8" />
@@ -154,12 +168,12 @@ ${current.html}
 <title>Generated Site</title>
 </head>
 <body>
-${current.html}
+${htmlBox.textContent}
 <script src="script.js"><\/script>
 </body>
 </html>`),
-        "style.css": current.css ?? "",
-        "script.js": current.js ?? ""
+        "style.css": cssBox.textContent,
+        "script.js": jsBox.textContent
       };
 
       const enc = new TextEncoder();
