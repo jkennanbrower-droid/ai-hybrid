@@ -35,7 +35,7 @@
       <label for="spec"><b>Describe the site you want:</b></label>
       <textarea id="spec" placeholder="Example: A SaaS landing page with a hero, features grid, pricing, and a footer. Use a blue/purple gradient."></textarea>
 
-      <!-- Presets for quick testing -->
+      <!-- Presets -->
       <div class="presets">
         <button class="preset" data-prompt="SaaS landing page for ‘FocusFlow’. Hero with headline + two CTAs, 3-feature grid with icons, testimonial card, pricing (Free/Pro), minimal footer. Blue→purple gradient. Mobile-first.">SaaS</button>
         <button class="preset" data-prompt="Personal portfolio for web developer Kenny. Sticky nav (Home, Projects, About, Contact), hero with name + tagline, 6-card projects grid, skills badges (JS/Node/React), contact form. Neutral light theme, subtle shadows.">Portfolio</button>
@@ -66,33 +66,33 @@
   </div>
 
   <script type="module">
-    // --- helpers (WHY: prevent accidental closing of this script tag + support full-doc returns) ---
+    // helpers: escape </script> & handle full-doc vs fragment
     const escClose = s => String(s ?? "").replace(/<\/script>/gi, '<\\/script>');
     function buildPreviewDoc({ html, css, js }) {
-      const isFullDoc = /<!doctype|<html|<head|<body/i.test(html || "");
+      const H = String(html ?? "");
+      const C = String(css ?? "");
+      const J = String(js ?? "");
+      const isFullDoc = /<!doctype|<html|<head|<body/i.test(H);
       if (isFullDoc) {
-        // inject inline CSS before </head>, inline JS before </body>
-        let out = html.replace(/<\/head>/i, `<style>${css ?? ""}</style></head>`);
-        out = out.replace(/<\/body>/i, `<script>${escClose(js ?? "")}<\/script></body>`);
+        let out = H.replace(/<\/head>/i, `<style>${C}</style></head>`);
+        out = out.replace(/<\/body>/i, `<script>${escClose(J)}<\/script></body>`);
         return escClose(out);
       }
-      // wrap a body fragment
       return escClose(`<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <link rel="stylesheet" href="style.css">
-<style>${css ?? ""}</style>
+<style>${C}</style>
 </head>
 <body>
-${html ?? ""}
-<script>${escClose(js ?? "")}<\/script>
+${H}
+<script>${escClose(J)}<\/script>
 </body>
 </html>`);
     }
 
-    // --- DOM refs ---
     const $ = (q) => document.querySelector(q);
     const spec = $("#spec");
     const btnGen = $("#gen");
@@ -103,7 +103,7 @@ ${html ?? ""}
     const cssBox = $("#css");
     const jsBox  = $("#js");
 
-    // Tabs
+    // tabs
     document.querySelectorAll(".tabs button").forEach(b=>{
       b.onclick = ()=>{
         document.querySelectorAll(".code").forEach(c=>c.classList.remove("active"));
@@ -112,12 +112,12 @@ ${html ?? ""}
     });
     htmlBox.classList.add("active");
 
-    // Presets
+    // presets
     document.querySelectorAll(".preset").forEach(p=>{
       p.onclick = ()=>{ spec.value = p.dataset.prompt; spec.focus(); };
     });
 
-    // Generate
+    // generate
     btnGen.onclick = async () => {
       btnGen.disabled = true; btnZip.disabled = true;
       statusEl.textContent = "Generating…";
@@ -136,14 +136,13 @@ ${html ?? ""}
           js:   data.js   ?? ""
         };
 
-        // Show code
+        // show code
         htmlBox.textContent = current.html;
         cssBox.textContent  = current.css;
         jsBox.textContent   = current.js;
 
-        // Build and load preview
-        const doc = buildPreviewDoc(current);
-        frame.srcdoc = doc;
+        // preview
+        frame.srcdoc = buildPreviewDoc(current);
 
         btnZip.disabled = false;
         statusEl.textContent = "Done.";
@@ -156,7 +155,7 @@ ${html ?? ""}
       }
     };
 
-    // Download .zip (index.html / style.css / script.js)
+    // zip download (index.html / style.css / script.js)
     btnZip.onclick = async () => {
       const files = {
         "index.html": escClose(`<!doctype html>
