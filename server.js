@@ -6,23 +6,18 @@ import cors from "cors";
 dotenv.config();
 
 const app = express();
-app.use(cors());            // why: allow your file:// index.html to call localhost:3000
-app.use(express.json());    // why: parse JSON bodies like { prompt: "..." }
+app.use(cors());            // allow file:// index.html to call localhost:3000
+app.use(express.json());    // parse JSON bodies
 
-const client = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,  // put this in .env: OPENAI_API_KEY=sk-...
-});
+const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-// Health check (quick GET)
-app.get("/", (req, res) => res.send("✅ Website Generator API running"));
+// Health check
+app.get("/", (_req, res) => res.send("✅ Website Generator API running"));
 
-// ---------- Structured Website Generation ----------
-// Returns STRICT JSON: { html, css, js }
+// --- Structured Website Generation: returns { html, css, js } ---
 app.post("/generate", async (req, res) => {
   const { prompt } = req.body ?? {};
-  if (!prompt) {
-    return res.status(400).json({ error: "Missing 'prompt' in body." });
-  }
+  if (!prompt) return res.status(400).json({ error: "Missing 'prompt' in body." });
 
   try {
     const response = await client.chat.completions.create({
@@ -35,38 +30,31 @@ app.post("/generate", async (req, res) => {
 Return ONLY strict JSON with keys exactly: "html", "css", "js".
 No markdown fences, no extra commentary.
 
-- "html": HTML markup for the page. It may be a full document or just <body> contents, but if full, it must include:
+- "html": page markup (may be full doc). If full, include:
   <link rel="stylesheet" href="style.css"> in <head>
   <script src="script.js"></script> before </body>
-- "css": a single stylesheet string (no @import or external links).
-- "js": a single script string (no external CDNs). Use vanilla JS only.
+- "css": one stylesheet string (no @import or external links)
+- "js": one script string (vanilla JS only; no CDNs)
 
-General rules:
-- Mobile-first responsive layout
-- Accessible contrast and semantic tags
-- Clean, modern styles (rounded corners, soft shadows welcome)
-`
+Use semantic HTML, accessible contrast, and mobile-first responsive layouts.`
         },
         {
           role: "user",
-          content: `Build a small site by this spec:
+          content: `Build a small site:
 
 Spec:
 ${prompt}
 
 Constraints:
-- If you output a full HTML document, include these references:
-    <link rel="stylesheet" href="style.css">
-    <script src="script.js"></script>
-- Keep CSS in one string. Keep JS in one string.
-- Do not use external CDNs.`
+- If full HTML document, include the exact references above.
+- Keep CSS in one string; JS in one string.
+- No external CDNs.`
         }
       ]
     });
 
     const raw = response.choices[0]?.message?.content?.trim() ?? "{}";
-    // strip code fences if the model "gets cute"
-    const cleaned = raw.replace(/```json|```/g, "");
+    const cleaned = raw.replace(/```json|```/g, ""); // just in case
 
     let payload;
     try {
@@ -84,7 +72,7 @@ Constraints:
   }
 });
 
-// (optional) structured reasoning endpoint kept around if you still want it
+// (optional) keep /api/ask if you still want the reasoning demo
 app.post("/api/ask", async (req, res) => {
   const { question } = req.body ?? {};
   if (!question) return res.status(400).json({ error: "Missing 'question'." });

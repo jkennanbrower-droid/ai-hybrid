@@ -5,20 +5,26 @@
   <title>Website Generator</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    body{font-family:system-ui,Segoe UI,Roboto,Arial;margin:2rem;max-width:1100px}
-    h1{margin:0 0 1rem}
-    .grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
-    textarea{width:100%;min-height:140px;padding:.8rem;font-size:1rem}
-    button{padding:.7rem 1rem;font-size:1rem;cursor:pointer}
-    .row{display:flex;gap:.5rem;align-items:center;margin:.5rem 0 1rem;flex-wrap:wrap}
+    :root { --bg:#0b1220; --panel:#141c2f; --text:#e6eefc; --muted:#9db0d3; --accent:#10bfa0; --chip:#f4f6fb; --chipText:#333; }
+    *{box-sizing:border-box}
+    body{font-family:system-ui,Segoe UI,Roboto,Arial;margin:2rem;max-width:1100px;color:var(--text);background:var(--bg)}
+    h1{margin:0 0 1.2rem}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:1.2rem}
+    textarea{width:100%;min-height:140px;padding:1rem;font-size:1rem;background:var(--panel);border:1px solid #24304a;color:var(--text);border-radius:12px}
+    button{padding:.75rem 1rem;font-size:1rem;cursor:pointer;border:none;border-radius:10px}
+    .row{display:flex;gap:.6rem;align-items:center;margin:.7rem 0 1.1rem;flex-wrap:wrap}
     .presets{display:flex;gap:.5rem;flex-wrap:wrap}
-    .preset{border:1px solid #ddd;background:#fafafa;border-radius:8px}
-    iframe{width:100%;height:520px;border:1px solid #ddd;border-radius:8px}
-    pre{background:#111;color:#eee;padding:1rem;border-radius:8px;white-space:pre-wrap;max-height:28rem;overflow:auto}
+    .preset{border:1px solid #2b395a;background:var(--panel);color:var(--text)}
+    .preset:hover{filter:brightness(1.1)}
+    .go{background:var(--accent);color:#02110c;font-weight:600}
+    .zip{background:#22c55e;color:#02110c;font-weight:600}
+    iframe{width:100%;height:540px;border:1px solid #2b395a;border-radius:12px;background:#fff}
+    pre{background:#0a0f1a;color:#d9e5ff;padding:1rem;border-radius:12px;white-space:pre-wrap;max-height:28rem;overflow:auto;border:1px solid #1a2440}
     .tabs{display:flex;gap:.5rem;margin:.5rem 0}
-    .tabs button{border:1px solid #ccc;background:#fafafa}
+    .tabs button{border:1px solid #2b395a;background:var(--panel);color:var(--text)}
     .code{display:none}
     .code.active{display:block}
+    .muted{color:var(--muted)}
   </style>
 </head>
 <body>
@@ -38,8 +44,9 @@
       </div>
 
       <div class="row">
-        <button id="gen">Generate</button>
-        <button id="download" disabled>Download .zip</button>
+        <button id="gen" class="go">Generate</button>
+        <button id="download" class="zip" disabled>Download .zip</button>
+        <span class="muted" id="status"></span>
       </div>
 
       <div class="tabs">
@@ -54,17 +61,21 @@
 
     <div>
       <b>Live Preview</b>
-      <iframe id="preview"></iframe>
+      <iframe id="preview" title="generated-site"></iframe>
     </div>
   </div>
 
   <script type="module">
+    // --- helpers ---
+    const escScriptClose = (s) => String(s ?? "").replace(/<\/script>/gi, '<\\/script>');
+    const $ = (q) => document.querySelector(q);
+
     let current = { html: "", css: "", js: "" };
 
-    const $ = (q) => document.querySelector(q);
     const spec = $("#spec");
     const btnGen = $("#gen");
     const btnZip = $("#download");
+    const statusEl = $("#status");
     const frame = $("#preview");
     const htmlBox = $("#html");
     const cssBox = $("#css");
@@ -81,16 +92,12 @@
 
     // Presets
     document.querySelectorAll(".preset").forEach(p=>{
-      p.onclick = ()=>{
-        spec.value = p.dataset.prompt;
-        spec.focus();
-      };
+      p.onclick = ()=>{ spec.value = p.dataset.prompt; spec.focus(); };
     });
 
     btnGen.onclick = async () => {
-      btnGen.disabled = true;
-      btnGen.textContent = "Generating…";
-      btnZip.disabled = true;
+      btnGen.disabled = true; btnZip.disabled = true;
+      statusEl.textContent = "Generating…";
 
       try {
         const res = await fetch("http://localhost:3000/generate", {
@@ -98,21 +105,18 @@
           headers: {"Content-Type":"application/json"},
           body: JSON.stringify({ prompt: spec.value || "A simple portfolio with hero, projects grid, and contact form." })
         });
-        if (!res.ok) {
-          const t = await res.text();
-          throw new Error(`HTTP ${res.status} – ${t}`);
-        }
+        if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
         const data = await res.json();
+
         current = { html: data.html ?? "", css: data.css ?? "", js: data.js ?? "" };
 
-        // show code
+        // Show code
         htmlBox.textContent = current.html;
         cssBox.textContent  = current.css;
         jsBox.textContent   = current.js;
 
-        // render preview: compose a full HTML doc with inline <style> and <script>
-        const doc = `
-<!doctype html>
+        // Compose preview doc safely (escape any accidental </script>)
+        const doc = escScriptClose(`<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8" />
@@ -122,25 +126,26 @@
 </head>
 <body>
 ${current.html}
-<script>${current.js}</script>
+<script>${current.js}<\/script>
 </body>
-</html>`;
+</html>`);
         frame.srcdoc = doc;
 
         btnZip.disabled = false;
-        btnGen.textContent = "Generate";
-        btnGen.disabled = false;
+        statusEl.textContent = "Done.";
       } catch (e) {
+        console.error(e);
         alert("Generation failed: " + e.message);
-        btnGen.textContent = "Generate";
+        statusEl.textContent = "Failed.";
+      } finally {
         btnGen.disabled = false;
       }
     };
 
-    // Build a .zip with index.html/style.css/script.js (store method)
+    // Build a .zip (index.html/style.css/script.js)
     btnZip.onclick = async () => {
       const files = {
-        "index.html": `<!doctype html>
+        "index.html": escScriptClose(`<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8" />
@@ -150,30 +155,28 @@ ${current.html}
 </head>
 <body>
 ${current.html}
-<script src="script.js"></script>
+<script src="script.js"><\/script>
 </body>
-</html>`,
-        "style.css": current.css,
-        "script.js": current.js
+</html>`),
+        "style.css": current.css ?? "",
+        "script.js": current.js ?? ""
       };
 
       const enc = new TextEncoder();
-      const fileEntries = [];
+      const entries = [];
       let offset = 0;
       const parts = [];
 
-      function crc32(str){
-        let c = ~0;
+      const crc32 = (str) => {
+        let c = ~0 >>> 0;
         for (let i = 0; i < str.length; i++){
           c = (c ^ str.charCodeAt(i)) >>> 0;
-          for (let k = 0; k < 8; k++){
-            c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
-          }
+          for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
         }
         return (~c) >>> 0;
-      }
+      };
 
-      // local file headers + file data
+      // local headers + data
       for (const [name, content] of Object.entries(files)) {
         const bytes = enc.encode(content);
         const nameBytes = enc.encode(name);
@@ -181,50 +184,49 @@ ${current.html}
 
         const local = new Uint8Array(30 + nameBytes.length);
         const dv = new DataView(local.buffer);
-        dv.setUint32(0, 0x04034b50, true);   // local header sig
-        dv.setUint16(4, 20, true);           // ver needed
-        dv.setUint16(6, 0, true);            // flags
-        dv.setUint16(8, 0, true);            // compression: store
-        dv.setUint16(10, 0, true);           // mod time
-        dv.setUint16(12, 0, true);           // mod date
-        dv.setUint32(14, crc, true);         // CRC-32
-        dv.setUint32(18, bytes.length, true);// comp size
-        dv.setUint32(22, bytes.length, true);// uncomp size
+        dv.setUint32(0, 0x04034b50, true);
+        dv.setUint16(4, 20, true);
+        dv.setUint16(6, 0, true);
+        dv.setUint16(8, 0, true); // store
+        dv.setUint16(10, 0, true);
+        dv.setUint16(12, 0, true);
+        dv.setUint32(14, crc, true);
+        dv.setUint32(18, bytes.length, true);
+        dv.setUint32(22, bytes.length, true);
         dv.setUint16(26, nameBytes.length, true);
-        dv.setUint16(28, 0, true);           // extra len
+        dv.setUint16(28, 0, true);
         local.set(nameBytes, 30);
 
         parts.push(local, bytes);
-        fileEntries.push({ nameBytes, crc, size: bytes.length, offset });
+        entries.push({ nameBytes, crc, size: bytes.length, offset });
         offset += local.length + bytes.length;
       }
 
       // central directory
-      const centralParts = [];
+      const centrals = [];
       let centralSize = 0;
-      for (const e of fileEntries) {
+      for (const e of entries) {
         const header = new Uint8Array(46 + e.nameBytes.length);
         const dv = new DataView(header.buffer);
-        dv.setUint32(0, 0x02014b50, true);   // central header sig
-        dv.setUint16(4, 20, true);           // ver made
-        dv.setUint16(6, 20, true);           // ver needed
-        dv.setUint16(8, 0, true);            // flags
-        dv.setUint16(10, 0, true);           // compression
-        dv.setUint16(12, 0, true);           // mod time
-        dv.setUint16(14, 0, true);           // mod date
-        dv.setUint32(16, e.crc, true);       // CRC-32
-        dv.setUint32(20, e.size, true);      // comp size
-        dv.setUint32(24, e.size, true);      // uncomp size
+        dv.setUint32(0, 0x02014b50, true);
+        dv.setUint16(4, 20, true);
+        dv.setUint16(6, 20, true);
+        dv.setUint16(8, 0, true);
+        dv.setUint16(10, 0, true);
+        dv.setUint16(12, 0, true);
+        dv.setUint32(16, e.crc, true);
+        dv.setUint32(20, e.size, true);
+        dv.setUint32(24, e.size, true);
         dv.setUint16(28, e.nameBytes.length, true);
-        dv.setUint16(30, 0, true);           // extra
-        dv.setUint16(32, 0, true);           // comment
-        dv.setUint16(34, 0, true);           // disk num
-        dv.setUint16(36, 0, true);           // internal attrs
-        dv.setUint32(38, 0, true);           // external attrs
-        dv.setUint32(42, e.offset, true);    // rel offset
+        dv.setUint16(30, 0, true);
+        dv.setUint16(32, 0, true);
+        dv.setUint16(34, 0, true);
+        dv.setUint16(36, 0, true);
+        dv.setUint32(38, 0, true);
+        dv.setUint32(42, e.offset, true);
         header.set(e.nameBytes, 46);
 
-        centralParts.push(header);
+        centrals.push(header);
         centralSize += header.length;
       }
 
@@ -234,18 +236,18 @@ ${current.html}
       dvEnd.setUint32(0, 0x06054b50, true);
       dvEnd.setUint16(4, 0, true);
       dvEnd.setUint16(6, 0, true);
-      dvEnd.setUint16(8, fileEntries.length, true);
-      dvEnd.setUint16(10, fileEntries.length, true);
+      dvEnd.setUint16(8, entries.length, true);
+      dvEnd.setUint16(10, entries.length, true);
       dvEnd.setUint32(12, centralSize, true);
       dvEnd.setUint32(16, offset, true);
       dvEnd.setUint16(20, 0, true);
 
-      const blob = new Blob([...parts, ...centralParts, end], { type: "application/zip" });
-      const link = document.createElement("a");
-      link.href = URL.createObjectURL(blob);
-      link.download = "generated-site.zip";
-      link.click();
-      URL.revokeObjectURL(link.href);
+      const blob = new Blob([...parts, ...centrals, end], { type: "application/zip" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "generated-site.zip";
+      a.click();
+      URL.revokeObjectURL(a.href);
     };
   </script>
 </body>
