@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Website Generator</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+
+<body>
+  <h1>⚙️ AI Website Generator</h1>
+  <textarea id="prompt" placeholder="Describe your website..."></textarea>
+  <button id="generateBtn">Generate</button>
+  <button id="downloadBtn" style="margin-left:10px;background:#008cff;">Download</button>
+
+<pre id="output"></pre>
+<iframe id="preview" style="width:80%;height:400px;margin-top:1rem;border-radius:8px;border:none;background:white;"></iframe>
+
+
+<script>
+  const btn = document.getElementById("generateBtn");
+  const downloadBtn = document.getElementById("downloadBtn");
+  const promptInput = document.getElementById("prompt");
+  const output = document.getElementById("output");
+  const preview = document.getElementById("preview");
+
+  let lastGenerated = ""; // to store AI's last reply
+
+  btn.onclick = async () => {
+    const prompt = promptInput.value;
+    output.textContent = "Generating... ⏳";
+    preview.srcdoc = "";
+    lastGenerated = "";
+
+    const res = await fetch("http://localhost:3000/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt }),
+    });
+
+    const data = await res.json();
+    lastGenerated = data.reply;
+    output.textContent = data.reply;
+
+    if (data.reply.includes("<html") || data.reply.includes("<body")) {
+      preview.srcdoc = data.reply;
+    } else {
+      preview.srcdoc = `<div style='padding:20px;font-family:sans-serif'>
+        <h2>Generated Output</h2><p>${data.reply}</p>
+      </div>`;
+    }
+  };
+
+  // 💾 Download button logic
+  downloadBtn.onclick = () => {
+    if (!lastGenerated) {
+      alert("No site generated yet!");
+      return;
+    }
+
+    const blob = new Blob([lastGenerated], { type: "text/html" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = "generated-site.html";
+    link.click();
+  };
+</script>
+
+
+</body>
+</html>

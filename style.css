@@ -1,0 +1,93 @@
+* {
+  box-sizing: border-box;
+}
+
+  body {
+    font-family: "Poppins", sans-serif;
+    background: linear-gradient(160deg, #0d1117, #161b22);
+    color: #e6edf3;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 40px 10px;
+    min-height: 100vh;
+  }
+
+  h1 {
+    margin-bottom: 20px;
+    font-weight: 600;
+    font-size: 1.8rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  textarea {
+    width: 90%;
+    max-width: 600px;
+    height: 100px;
+    padding: 12px;
+    margin-bottom: 15px;
+    border-radius: 10px;
+    border: none;
+    background: #1e2329;
+    color: #fff;
+    font-size: 1rem;
+    resize: none;
+    transition: box-shadow 0.2s ease;
+  }
+
+  textarea:focus {
+    outline: none;
+    box-shadow: 0 0 10px #00bfa6;
+  }
+
+  button {
+    background: #00bfa6;
+    border: none;
+    padding: 10px 20px;
+    margin: 5px;
+    border-radius: 8px;
+    font-size: 1rem;
+    cursor: pointer;
+    color: white;
+    transition: transform 0.2s, background 0.2s;
+  }
+
+  button:hover {
+    transform: scale(1.05);
+    background: #00d4b5;
+  }
+
+  #downloadBtn {
+    background: #0078ff;
+  }
+
+  pre {
+    background: #1e1e1e;
+    padding: 20px;
+    border-radius: 8px;
+    width: 90%;
+    max-width: 600px;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    margin-top: 20px;
+  }
+
+  iframe {
+    width: 90%;
+    max-width: 600px;
+    height: 400px;
+    margin-top: 1.5rem;
+    border-radius: 12px;
+    border: 2px solid #2d333b;
+    background: #fff;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  }
+
+@media (max-width: 600px) {
+  textarea, pre, iframe {
+    width: 100%;
+  }
+}
